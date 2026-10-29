@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenConnect VPN</title>
+    <style>
+        :root {
+            --bg:#0f1117; --surface:#181b23; --surface2:#1e2230; --border:#262a35;
+            --text:#e4e6ed; --muted:#8b8fa3; --accent:#2e2d2d;
+            --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --radius:10px;
+            --mono:'SF Mono',SFMono-Regular,Consolas,Menlo,monospace;
+        }
+        [data-theme="light"] {
+            --bg:#f5f6f8; --surface:#fff; --surface2:#f0f1f4; --border:#e0e3e8;
+            --text:#1a1a2e; --muted:#6b7084;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+               background:var(--bg); color:var(--text); padding:20px; font-size:14px;
+               max-width:720px; margin:0 auto; line-height:1.5; }
+        .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+        .header h1 { font-size:18px; font-weight:700; }
+        .theme-btn { background:var(--surface); border:1px solid var(--border); color:var(--muted);
+                     cursor:pointer; border-radius:8px; padding:6px; display:flex; }
+        .theme-btn svg { width:16px; height:16px; }
+        .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+                padding:20px; margin-bottom:14px; }
+        .card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+                      color:var(--muted); margin-bottom:14px; }
+        .status-banner { display:flex; align-items:center; gap:12px; padding:14px 16px;
+                         border-radius:8px; margin-bottom:16px; }
+        .status-banner.connected { background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.2); }
+        .status-banner.connecting { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.2); }
+        .status-banner.disconnected { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2); }
+        .status-banner.idle { background:var(--surface); border:1px solid var(--border); }
+        .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+        .status-banner.connected .dot { background:var(--green); box-shadow:0 0 0 3px rgba(34,197,94,.2); }
+        .status-banner.connecting .dot { background:var(--yellow); box-shadow:0 0 0 3px rgba(245,158,11,.2); animation:pulse 1.5s infinite; }
+        .status-banner.disconnected .dot { background:var(--red); box-shadow:0 0 0 3px rgba(239,68,68,.2); }
+        .status-banner.idle .dot { background:var(--muted); }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+        .status-text { font-size:14px; font-weight:600; flex:1; }
+        .status-banner.connected .status-text { color:var(--green); }
+        .status-banner.connecting .status-text { color:var(--yellow); }
+        .status-banner.disconnected .status-text { color:var(--red); }
+        .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .info-item { background:var(--surface2); border-radius:8px; padding:12px 14px; }
+        .info-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px;
+                      color:var(--muted); margin-bottom:4px; }
+        .info-value { font-size:14px; font-weight:600; font-family:var(--mono); word-break:break-all; }
+        .notice { margin-top:12px; padding:12px 14px; border-radius:8px; font-size:12.5px; }
+        .notice.err { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.25); color:var(--red); }
+        .notice.warn { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); }
+        .notice code { font-family:var(--mono); word-break:break-all; }
+        .settings-form { display:flex; flex-direction:column; gap:12px; }
+        .settings-row { display:flex; flex-direction:column; gap:4px; }
+        .settings-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+        .settings-input, textarea.settings-input, select.settings-input { background:var(--surface2); border:1px solid var(--border);
+            border-radius:6px; color:var(--text); font-size:13px; font-family:var(--mono); padding:8px 10px; width:100%; outline:none; }
+        textarea.settings-input { min-height:90px; resize:vertical; }
+        .settings-input:focus { border-color:var(--muted); }
+        .settings-hint { font-size:11px; color:var(--muted); }
+        .settings-hint code { font-family:var(--mono); }
+        .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+        .check { display:flex; align-items:center; gap:8px; font-size:13px; }
+        .settings-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:4px; }
+        .save-btn { background:var(--accent); color:#fff; border:none; border-radius:6px; padding:8px 18px;
+                    font-size:13px; font-weight:600; cursor:pointer; }
+        .save-btn.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+        .save-btn:disabled { opacity:.5; cursor:default; }
+        .link-btn { background:none; border:none; color:var(--muted); font-size:11px; cursor:pointer; text-decoration:underline; padding:0; }
+        .save-status { font-size:12px; color:var(--muted); }
+        .save-status.ok { color:var(--green); } .save-status.err { color:var(--red); }
+        details summary { cursor:pointer; font-size:12px; font-weight:600; color:var(--muted); margin:4px 0; }
+        details[open] summary { margin-bottom:12px; }
+        .hidden { display:none !important; }
+        .log-controls { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .log-toggle { font-size:12px; color:var(--muted); background:none; border:none; cursor:pointer; font-weight:600; }
+        .log-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px;
+                   max-height:360px; overflow-y:auto; font-family:var(--mono); font-size:11.5px; line-height:1.7;
+                   color:var(--muted); white-space:pre-wrap; word-break:break-all; }
+        .log-line .msg-err { color:var(--red); } .log-line .msg-warn { color:var(--yellow); }
+        .log-line .msg-ok { color:var(--green); } .log-line .ts { opacity:.6; }
+        .refresh-bar { display:flex; align-items:center; justify-content:center; gap:6px; padding:8px;
+                       font-size:11px; color:var(--muted); }
+        @media (max-width:520px){ body{padding:14px;} .info-grid,.row2,.row3{grid-template-columns:1fr;} }
+        .steps { margin:4px 0 0 18px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
+        .bookmarklet { display:inline-block; padding:4px 10px; border:1px dashed var(--muted); border-radius:6px;
+                       color:var(--text); text-decoration:none; font-weight:600; font-size:12px; cursor:grab; }
+        .login-message { font-size:13px; white-space:pre-wrap; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>OpenConnect VPN</h1>
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+            <svg id="iconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg id="iconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+    </div>
+
+    <div id="banner" class="status-banner idle">
+        <span class="dot"></span><span id="state" class="status-text">Loading...</span>
+        <button class="save-btn secondary" id="reconnect" type="button">Reconnect now</button>
+    </div>
+
+    <div class="card" id="loginCard">
+        <div class="card-title">Sign-in</div>
+        <div id="loginIdle" class="settings-form">
+            <div class="login-message" id="loginInfo">Sign in here when the portal needs a one-time code or single sign-on. The camera keeps the gateway session and reconnects on its own until the gateway ends it.</div>
+            <div class="settings-actions" style="justify-content:flex-start;">
+                <button class="save-btn" id="signIn" type="button">Sign in</button>
+                <span class="save-status" id="sessionInfo"></span>
+            </div>
+        </div>
+
+        <form id="loginForm" class="settings-form hidden" autocomplete="off">
+            <div class="login-message" id="lfBanner"></div>
+            <div class="login-message" id="lfMessage"></div>
+            <div class="notice err hidden" id="lfError"></div>
+            <div class="settings-form" id="lfFields"></div>
+            <div class="settings-actions">
+                <button class="save-btn secondary" id="lfCancel" type="button">Cancel</button>
+                <button class="save-btn" id="lfSubmit" type="submit">Continue</button>
+            </div>
+        </form>
+
+        <div id="loginSso" class="settings-form hidden">
+            <div class="login-message" id="ssoIntro">The portal uses single sign-on. Complete it in your browser:</div>
+            <ol class="steps">
+                <li><button class="save-btn" id="ssoOpen" type="button">Open the sign-in page</button> (opens in a new tab)</li>
+                <li>Sign in there, including any MFA prompt.</li>
+                <li>When the portal says the sign-in is complete, click the <a class="bookmarklet" id="bookmarklet" href="#">Send to camera</a> bookmark in that tab. Create it once by dragging the button to your bookmarks bar (show the bar with Ctrl+Shift+B, or Cmd+Shift+B on a Mac).</li>
+            </ol>
+            <div class="settings-hint">Without the bookmark: on the final page, copy the <code>globalprotectcallback:</code> link, or view the page source and copy all of it, then paste it here.</div>
+            <textarea class="settings-input" id="ssoPaste" placeholder="Paste the final page or link here"></textarea>
+            <div class="notice err hidden" id="ssoError"></div>
+            <div class="settings-actions">
+                <button class="save-btn secondary" id="ssoCancel" type="button">Cancel</button>
+                <button class="save-btn" id="ssoSubmit" type="button">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Connection</div>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">VPN IP</div><div class="info-value" id="ip">-</div></div>
+            <div class="info-item"><div class="info-label">Transport</div><div class="info-value" id="transport">-</div></div>
+            <div class="info-item"><div class="info-label">Connected since</div><div class="info-value" id="since">-</div></div>
+            <div class="info-item"><div class="info-label">Next attempt</div><div class="info-value" id="retry">-</div></div>
+        </div>
+        <div class="notice err hidden" id="err"></div>
+        <div class="notice warn hidden" id="warn"></div>
+        <div class="notice warn hidden" id="untrusted">
+            <div><strong>Server certificate not trusted.</strong> <span id="untrustedReason"></span></div>
+            <div style="margin:6px 0;">Pin: <code id="untrustedPin"></code></div>
+            <div class="settings-hint" style="margin-bottom:8px;">Only trust this if the fingerprint matches your portal's certificate. Alternatively, upload the issuing CA under Advanced.</div>
+            <button class="save-btn" id="trustPin" type="button">Trust this certificate</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Access</div>
+        <div class="info-grid">
+            <div class="info-item"><div class="info-label">Reach camera from VPN</div><div class="info-value" id="reach">-</div></div>
+            <div class="info-item"><div class="info-label">Inbound SOCKS5 (from VPN)</div><div class="info-value" id="insocks">-</div></div>
+            <div class="info-item"><div class="info-label">Outbound HTTP proxy</div><div class="info-value" id="httpproxy">http://127.0.0.1:28080</div></div>
+            <div class="info-item"><div class="info-label">Outbound SOCKS5</div><div class="info-value" id="outsocks">127.0.0.1:21080</div></div>
+        </div>
+        <div class="settings-hint" style="margin-top:10px;">The forwarded ports on the VPN IP reach the camera. Set the camera's global HTTP proxy to the outbound proxy to route its own traffic through the VPN.</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">Settings</div>
+        <div class="settings-form">
+            <label class="check"><input type="checkbox" id="Enabled"> Enable VPN connection</label>
+            <div class="row2">
+                <div class="settings-row">
+                    <label class="settings-label" for="Server">Portal or gateway address</label>
+                    <input class="settings-input" id="Server" type="text" placeholder="vpn.example.com" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label" for="ServerType">Connect to</label>
+                    <select class="settings-input" id="ServerType">
+                        <option value="portal">Portal (recommended)</option>
+                        <option value="gateway">Gateway directly</option>
+                    </select>
+                </div>
+            </div>
+            <div class="settings-row">
+                <label class="settings-label" for="Gateway">Preferred gateway (optional)</label>
+                <input class="settings-input" id="Gateway" type="text" placeholder="first gateway the portal offers" autocomplete="off" spellcheck="false">
+                <span class="settings-hint">Gateway name or address from the portal's list.</span>
+            </div>
+            <div class="row2">
+                <div class="settings-row">
+                    <label class="settings-label" for="Username">Username</label>
+                    <input class="settings-input" id="Username" type="text" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="settings-row">
+                    <label class="settings-label" for="Password">Password (optional) <button class="link-btn" type="button" data-clear="Password">clear</button></label>
+                    <input class="settings-input" id="Password" type="password" autocomplete="new-password" placeholder="not stored">
+                </div>
+            </div>
+            <span class="settings-hint">Store the password only if the portal asks for nothing else: the camera can then sign in again by itself after the gateway ends a session. With a one-time code or single sign-on, leave it empty and use Sign in above.</span>
+
+            <details>
+                <summary>Advanced</summary>
+                <div class="settings-form">
+                    <div class="settings-row">
+                        <label class="settings-label" for="ServerCert">Trusted server certificate pin (optional)</label>
+                        <input class="settings-input" id="ServerCert" type="text" placeholder="pin-sha256:..." autocomplete="off" spellcheck="false">
+                        <span class="settings-hint">Accept a self-signed or privately issued portal certificate by its fingerprint.</span>
+                    </div>
+                    <div class="settings-row">
+                        <label class="settings-label" for="ReportedOs">Client OS reported to the portal</label>
+                        <select class="settings-input" id="ReportedOs">
+                            <option value="linux">Linux (AXIS OS is Linux-based)</option>
+                            <option value="linux-64">Linux 64-bit</option>
+                            <option value="win">Windows</option>
+                            <option value="mac-intel">macOS</option>
+                        </select>
+                        <span class="settings-hint">Change only if the portal does not admit Linux clients. The host information (HIP) report always describes the camera itself: model, serial number, AXIS OS version and network interfaces.</span>
+                    </div>
+                    <div class="row2">
+                        <div class="settings-row">
+                            <label class="settings-label" for="certFile">Client certificate + key (PEM) <button class="link-btn" type="button" id="certRemove">remove</button></label>
+                            <input type="file" id="certFile" accept=".pem,.key,text/plain" style="font-size:12px;color:var(--muted);">
+                            <span class="settings-hint" id="certState">not set</span>
+                        </div>
+                        <div class="settings-row">
+                            <label class="settings-label" for="caFile">Extra CA certificate (PEM) <button class="link-btn" type="button" id="caRemove">remove</button></label>
+                            <input type="file" id="caFile" accept=".pem,text/plain" style="font-size:12px;color:var(--muted);">
+                            <span class="settings-hint" id="caState">not set</span>
+                        </div>
+                    </div>
+                    <div class="row3">
+                        <div class="settings-row"><label class="settings-label" for="HttpProxyPort">HTTP proxy port</label><input class="settings-input" id="HttpProxyPort" type="text" placeholder="28080" autocomplete="off"></div>
+                        <div class="settings-row"><label class="settings-label" for="Socks5Port">SOCKS5 port</label><input class="settings-input" id="Socks5Port" type="text" placeholder="21080" autocomplete="off"></div>
+                        <div class="settings-row"><label class="settings-label" for="ForwardPorts">Forwarded ports</label><input class="settings-input" id="ForwardPorts" type="text" placeholder="80,443,554" autocomplete="off" spellcheck="false"></div>
+                    </div>
+                    <div class="settings-row" style="margin-top:10px;">
+                        <label class="settings-label" for="KeepAliveMinutes">Keep-alive (minutes, 0 = off)</label>
+                        <input class="settings-input" id="KeepAliveMinutes" type="text" inputmode="numeric" placeholder="0" autocomplete="off" style="max-width:120px;">
+                        <span class="settings-hint">Sends a DNS query through the tunnel at this interval so the gateway's idle timeout does not end the session. This overrides your VPN administrator's idle policy, so only turn it on if they agree. It does not extend the gateway's maximum login lifetime.</span>
+                    </div>
+                </div>
+            </details>
+
+            <div class="settings-actions">
+                <span class="save-status" id="savestatus"></span>
+                <button class="save-btn" id="save" type="button">Save &amp; Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="log-controls">
+            <div class="card-title" style="margin-bottom:0;">Service Log</div>
+            <button class="log-toggle" id="log-scroll-btn">Scroll to bottom</button>
+        </div>
+        <div class="log-box" id="log-box">Loading logs...</div>
+    </div>
+
+    <div class="refresh-bar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        <span>Auto-refresh every 4s</span>
+    </div>
+
+<script>
+(function () {
+    var APP = 'OpenConnect_VPN';
+    var PARAM_CGI = '/axis-cgi/param.cgi';
+    var LOG_URL = '/axis-cgi/admin/systemlog.cgi?appname=' + APP;
+    var TEXT_FIELDS = ['Server', 'Gateway', 'Username', 'ServerCert', 'HttpProxyPort', 'Socks5Port', 'ForwardPorts', 'KeepAliveMinutes'];
+    var SELECT_FIELDS = ['ServerType', 'ReportedOs'];
+    var CHECK_FIELDS = ['Enabled'];
+    var SECRET_FIELDS = ['Password'];
+    var logBox = document.getElementById('log-box');
+    var autoScroll = true;
+    var lastStatus = null;
+    var shownLoginId = null;
+    var ssoWindow = null;
+    var ssoUrl = '';
+    var signInRequested = false;
+    var autoSignInUntil = 0;
+    var LOGIN_INFO = 'Sign in here when the portal needs a one-time code or single sign-on. The camera keeps the gateway session and reconnects on its own until the gateway ends it.';
+
+    function $(id) { return document.getElementById(id); }
+    function show(el, visible) { el.classList.toggle('hidden', !visible); }
+    function post(path, body, type) {
+        return fetch(path, { method: 'POST', credentials: 'same-origin',
+                             headers: { 'Content-Type': type || 'application/x-www-form-urlencoded' }, body: body || '' })
+            .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+                if (!r.ok) throw new Error(j.error || ('request failed (' + r.status + ')'));
+                return j;
+            }); });
+    }
+
+    // Theme
+    var root = document.documentElement, sun = $('iconSun'), moon = $('iconMoon');
+    function applyTheme(t) {
+        if (t === 'light') { root.setAttribute('data-theme', 'light'); sun.style.display = 'none'; moon.style.display = 'block'; }
+        else { root.removeAttribute('data-theme'); sun.style.display = 'block'; moon.style.display = 'none'; }
+    }
+    var stored = localStorage.getItem('oc-theme');
+    if (stored) applyTheme(stored);
+    else if (window.matchMedia('(prefers-color-scheme: light)').matches) applyTheme('light');
+    $('themeToggle').addEventListener('click', function () {
+        var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('oc-theme', next); applyTheme(next);
+    });
+
+    // Status
+    var LABELS = {
+        connected: 'Connected', connecting: 'Connecting...', reconnecting: 'Connection lost, reconnecting...',
+        starting: 'Starting...', disconnected: 'Disconnected, retrying', disabled: 'Disabled',
+        waiting_config: 'Waiting for configuration', awaiting_input: 'Waiting for you to sign in below',
+        login_required: 'Sign-in required', auth_failed: 'Authentication failed',
+        cert_untrusted: 'Server certificate not trusted', error: 'Error'
+    };
+    function bannerClass(s) {
+        if (s === 'connected') return 'connected';
+        if (s === 'connecting' || s === 'reconnecting' || s === 'starting' || s === 'awaiting_input' || s === 'login_required') return 'connecting';
+        if (s === 'disabled' || s === 'waiting_config') return 'idle';
+        return 'disconnected';
+    }
+
+    function renderStatus(j) {
+        lastStatus = j;
+        // Saving from this page means someone is here: if the portal turns out
+        // to need a person (SSO, one-time code), start the sign-in right away.
+        if (j.state === 'login_required' && Date.now() < autoSignInUntil) {
+            autoSignInUntil = 0;
+            signInRequested = true;
+            post('api/login').then(function () { setTimeout(pollStatus, 800); }).catch(function () {});
+        } else if (j.state === 'connected' || j.state === 'awaiting_input') {
+            autoSignInUntil = 0;
+        }
+        $('banner').className = 'status-banner ' + bannerClass(j.state);
+        $('state').textContent = LABELS[j.state] || j.state;
+        var ip = j.vpn_ip || '';
+        $('ip').textContent = ip || '-';
+        $('transport').textContent = j.transport || '-';
+        $('since').textContent = j.connected_since ? new Date(Number(j.connected_since) * 1000).toLocaleString() : '-';
+        $('retry').textContent = j.retry_in ? ('in ' + j.retry_in + ' s') : '-';
+        $('err').textContent = j.last_error || '';
+        show($('err'), Boolean(j.last_error) && j.state !== 'cert_untrusted' && j.state !== 'awaiting_input');
+        $('warn').textContent = j.warning ? ('Outbound ' + j.warning + '. Choose another port under Advanced.') : '';
+        show($('warn'), Boolean(j.warning));
+        show($('untrusted'), Boolean(j.untrusted_pin));
+        $('untrustedPin').textContent = j.untrusted_pin || '';
+        $('untrustedReason').textContent = j.untrusted_reason ? ('Reason: ' + j.untrusted_reason) : '';
+        var hp = j.http_port || '28080', sp = j.socks_port || '21080', fp = j.forward_ports || '80,443,554';
+        $('httpproxy').textContent = 'http://127.0.0.1:' + hp;
+        $('outsocks').textContent = '127.0.0.1:' + sp;
+        $('reach').textContent = ip ? (ip + ' : ' + fp.split(',').join(' / ')) : '-';
+        $('insocks').textContent = ip ? (ip + ':1080') : '-';
+        renderLogin(j);
+    }
+
+    // Sign-in: forms and SSO steps relayed from the portal
+    function renderLogin(j) {
+        var login = j.login;
+        $('sessionInfo').textContent = j.session ? 'A gateway session is saved on the camera.' : '';
+        if (!login) {
+            shownLoginId = null;
+            show($('loginIdle'), true); show($('loginForm'), false); show($('loginSso'), false);
+            $('loginInfo').textContent = j.state === 'connecting' && signInRequested ? 'Contacting the portal...' : LOGIN_INFO;
+            if (j.state !== 'connecting') signInRequested = false;
+            $('signIn').textContent = j.state === 'connected' || j.state === 'reconnecting' ? 'Sign in again' : 'Sign in';
+            return;
+        }
+        signInRequested = false;
+        if (j.sso_error) { $('ssoError').textContent = j.sso_error; show($('ssoError'), true); }
+        if (login.id === shownLoginId) return; // keep what the user is typing
+        shownLoginId = login.id;
+        show($('loginIdle'), false);
+        if (login.url !== undefined) {
+            ssoUrl = login.url;
+            // Step 2 continues in the tab of step 1 when the browser still lets
+            // this page steer it; otherwise the button opens it again.
+            var continued = login.stage === 'gateway' && ssoWindow && !ssoWindow.closed && navigateSso(ssoWindow);
+            $('ssoIntro').textContent = login.stage !== 'gateway'
+                ? 'The portal uses single sign-on. Complete it in your browser:'
+                : continued
+                    ? 'Step 2 of 2: the portal accepted your sign-in, and the gateway asks for its own. It is continuing in the sign-in tab; when that finishes, click Send to camera there again. If the tab shows nothing new, click Open the sign-in page.'
+                    : 'Step 2 of 2: the portal accepted your sign-in, and the gateway asks for its own. Click Open the sign-in page again (the result of step 1 cannot be reused); your browser is usually still signed in, so this one is quick.';
+            $('ssoPaste').value = ''; show($('ssoError'), false);
+            show($('loginForm'), false); show($('loginSso'), true);
+            return;
+        }
+        show($('loginSso'), false); show($('loginForm'), true);
+        $('lfBanner').textContent = login.banner || ''; show($('lfBanner'), Boolean(login.banner));
+        $('lfMessage').textContent = login.message || ''; show($('lfMessage'), Boolean(login.message));
+        $('lfError').textContent = login.error || ''; show($('lfError'), Boolean(login.error));
+        var box = $('lfFields');
+        box.innerHTML = '';
+        var focus = null;
+        (login.fields || []).forEach(function (f) {
+            var row = document.createElement('div');
+            row.className = 'settings-row';
+            var label = document.createElement('label');
+            label.className = 'settings-label';
+            label.textContent = (f.label || f.name).replace(/:\s*$/, '');
+            var input;
+            if (f.type === 'select') {
+                input = document.createElement('select');
+                (f.choices || []).forEach(function (c) {
+                    var o = document.createElement('option');
+                    o.value = c.name; o.textContent = c.label || c.name;
+                    if (c.name === f.value) o.selected = true;
+                    input.appendChild(o);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = f.type === 'password' ? 'password' : 'text';
+                input.value = f.value || '';
+                input.autocomplete = f.type === 'token' ? 'one-time-code' : 'off';
+                if (f.type === 'token') input.inputMode = 'numeric';
+            }
+            input.className = 'settings-input';
+            input.name = f.name;
+            input.id = 'lf_' + f.name;
+            label.htmlFor = input.id;
+            row.appendChild(label); row.appendChild(input);
+            box.appendChild(row);
+            if (!focus && !input.value) focus = input;
+        });
+        if (focus) focus.focus();
+    }
+
+    $('signIn').addEventListener('click', function () {
+        signInRequested = true;
+        post('api/login').then(function () { $('loginInfo').textContent = 'Contacting the portal...'; setTimeout(pollStatus, 800); })
+            .catch(function (e) { signInRequested = false; $('loginInfo').textContent = e.message; });
+    });
+    $('loginForm').addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        if (!lastStatus || !lastStatus.login) return;
+        var parts = ['form_id=' + encodeURIComponent(lastStatus.login.id)];
+        Array.prototype.forEach.call($('lfFields').querySelectorAll('input,select'), function (el) {
+            parts.push(encodeURIComponent(el.name) + '=' + encodeURIComponent(el.value));
+        });
+        $('lfSubmit').disabled = true;
+        post('api/answer', parts.join('&')).then(function () { setTimeout(pollStatus, 800); })
+            .catch(function (e) { $('lfError').textContent = e.message; show($('lfError'), true); })
+            .then(function () { $('lfSubmit').disabled = false; });
+    });
+    function cancelLogin() { post('api/cancel').then(function () { setTimeout(pollStatus, 800); }); }
+    $('lfCancel').addEventListener('click', cancelLogin);
+    $('ssoCancel').addEventListener('click', cancelLogin);
+
+    // The SAML request is either a URL or (POST binding) an HTML form to submit.
+    // A normal tab, not a sized pop-up: pop-up windows have no bookmarks bar.
+    function navigateSso(win) {
+        var prefix = 'data:text/html;base64,';
+        try {
+            if (ssoUrl.indexOf(prefix) === 0) {
+                // A POST-binding form has to be written into a page of our own first.
+                if (win.location.href !== 'about:blank') win.location.href = 'about:blank';
+                win.document.open();
+                win.document.write(atob(ssoUrl.slice(prefix.length)));
+                win.document.close();
+            } else {
+                win.location.href = ssoUrl;
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    $('ssoOpen').addEventListener('click', function () {
+        ssoWindow = window.open('', 'gp-sso');
+        if (!ssoWindow) { $('ssoError').textContent = 'The browser blocked the sign-in window; allow pop-ups for the camera.'; show($('ssoError'), true); return; }
+        navigateSso(ssoWindow);
+    });
+    function sendSso(text) {
+        $('ssoSubmit').disabled = true;
+        return post('api/sso', text, 'text/plain')
+            .then(function () { show($('ssoError'), false); setTimeout(pollStatus, 800); })
+            .catch(function (e) { $('ssoError').textContent = e.message; show($('ssoError'), true); })
+            .then(function () { $('ssoSubmit').disabled = false; });
+    }
+    $('ssoSubmit').addEventListener('click', function () { if ($('ssoPaste').value.trim()) sendSso($('ssoPaste').value); });
+    // From the "Send to camera" bookmark, run on the portal's final page.
+    window.addEventListener('message', function (e) {
+        if (!ssoWindow || e.source !== ssoWindow || !e.data || typeof e.data.gpSso !== 'string') return;
+        sendSso(e.data.gpSso);
+    });
+    $('bookmarklet').href = 'javascript:' + encodeURIComponent('(function(){' +
+        'var l=[].map.call(document.querySelectorAll(\'a[href^="globalprotectcallback:"]\'),function(a){return a.href}).join("\\n");' +
+        'var t=location.href+"\\n"+l+"\\n"+document.documentElement.outerHTML;' +
+        'if(!/saml-username|prelogin-cookie|portal-userauthcookie|globalprotectcallback|cas-as/.test(t)){' +
+        'alert("This page has no GlobalProtect sign-in result yet. Wait until the sign-in has finished, then click again.");return;}' +
+        'if(window.opener){window.opener.postMessage({gpSso:t},"*");alert("Sent to the camera. You can close this window.");}' +
+        'else{var a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();document.execCommand("copy");' +
+        'alert("Copied. Paste it on the camera settings page.");}})()');
+    $('bookmarklet').addEventListener('click', function (e) {
+        e.preventDefault();
+        alert('Drag this button to your bookmarks bar, then click it on the portal page once the sign-in is complete.');
+    });
+
+    function pollStatus() {
+        fetch('api/status?_=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) { if (j) renderStatus(j); })
+            .catch(function () {});
+    }
+
+    // Logs
+    $('log-scroll-btn').addEventListener('click', function () { logBox.scrollTop = logBox.scrollHeight; autoScroll = true; });
+    logBox.addEventListener('scroll', function () { autoScroll = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40; });
+    function classify(msg) {
+        if (/error|fail|panic|fatal|rejected|denied/i.test(msg)) return 'msg-err';
+        if (/warn|timeout|retry|reconnect/i.test(msg)) return 'msg-warn';
+        if (/established|connected|ready|saved|up\b/i.test(msg)) return 'msg-ok';
+        return '';
+    }
+    function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function pollLogs() {
+        fetch(LOG_URL, { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (r) { return r.text(); })
+            .then(function (txt) {
+                var lines = txt.split('\n').filter(function (l) { return l.trim(); });
+                var h = '';
+                for (var i = 0; i < lines.length; i++) {
+                    var m = lines[i].match(/^(\S+\s+\S+)\s+(.*)/);
+                    var cls = classify(lines[i]);
+                    if (m) h += '<span class="log-line"><span class="ts">' + esc(m[1]) + '</span> <span class="' + cls + '">' + esc(m[2]) + '</span></span>\n';
+                    else h += '<span class="log-line"><span class="' + cls + '">' + esc(lines[i]) + '</span></span>\n';
+                }
+                logBox.innerHTML = h || 'No logs yet.';
+                if (autoScroll) logBox.scrollTop = logBox.scrollHeight;
+            }).catch(function () {});
+    }
+
+    // Settings transport: the app's endpoint first (works on devices without
+    // param.cgi and never puts secrets in a URL), param.cgi as the fallback.
+    function readSettings() {
+        return fetch('api/settings?_=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+            .catch(function () {
+                return fetch(PARAM_CGI + '?action=list&group=root.' + APP, { cache: 'no-store', credentials: 'same-origin' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (text) {
+                        if (/^\s*</.test(text) || text.indexOf(APP + '.') < 0) throw new Error('no settings transport available');
+                        var values = {};
+                        text.split(/\r?\n/).forEach(function (line) {
+                            var i = line.indexOf('=');
+                            if (i < 0) return;
+                            var name = line.slice(0, i).split('.').pop(), value = line.slice(i + 1);
+                            if (SECRET_FIELDS.indexOf(name) >= 0) values[name + 'IsSet'] = value ? 'yes' : 'no';
+                            else values[name] = value;
+                        });
+                        return values;
+                    });
+            });
+    }
+
+    function writeSettings(values) {
+        var names = Object.keys(values);
+        var body = names.map(function (n) { return encodeURIComponent(n) + '=' + encodeURIComponent(values[n]); }).join('&');
+        return fetch('api/settings', { method: 'POST', credentials: 'same-origin',
+                                       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+            .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+            .catch(function () {
+                var cgi = 'action=update&' + names.map(function (n) { return 'root.' + APP + '.' + n + '=' + encodeURIComponent(values[n]); }).join('&');
+                return fetch(PARAM_CGI, { method: 'POST', credentials: 'same-origin',
+                                          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: cgi })
+                    .then(function (r) { return r.text(); })
+                    .then(function (t) { if (!/ok/i.test(t)) throw new Error('could not write settings'); return t; });
+            });
+    }
+
+    function loadSettings() {
+        return readSettings().then(function (v) {
+            TEXT_FIELDS.forEach(function (n) { if (typeof v[n] === 'string') $(n).value = v[n]; });
+            SELECT_FIELDS.forEach(function (n) { if (v[n]) $(n).value = v[n]; });
+            CHECK_FIELDS.forEach(function (n) { $(n).checked = v[n] === 'yes'; });
+            SECRET_FIELDS.forEach(function (n) {
+                $(n).value = '';
+                $(n).placeholder = v[n + 'IsSet'] === 'yes' ? 'stored (leave empty to keep)' : 'not stored';
+            });
+            $('certState').textContent = v.ClientCertIsSet === 'yes' ? 'stored' : 'not set';
+            $('caState').textContent = v.CaIsSet === 'yes' ? 'stored' : 'not set';
+        }).catch(function (e) { setSaveStatus('Could not load settings: ' + (e && e.message ? e.message : 'unavailable'), true); });
+    }
+
+    function setSaveStatus(text, isError, isOk) {
+        var st = $('savestatus');
+        st.className = 'save-status' + (isError ? ' err' : (isOk ? ' ok' : ''));
+        st.textContent = text;
+    }
+
+    function readFile(input) {
+        return new Promise(function (resolve, reject) {
+            var f = input.files && input.files[0];
+            if (!f) return resolve(null);
+            var reader = new FileReader();
+            reader.onload = function () { resolve(reader.result); };
+            reader.onerror = function () { reject(new Error('could not read ' + f.name)); };
+            reader.readAsText(f);
+        });
+    }
+
+    $('save').addEventListener('click', function () {
+        var values = {};
+        TEXT_FIELDS.forEach(function (n) { values[n] = $(n).value.trim(); });
+        SELECT_FIELDS.forEach(function (n) { values[n] = $(n).value; });
+        CHECK_FIELDS.forEach(function (n) { values[n] = $(n).checked ? 'yes' : 'no'; });
+        SECRET_FIELDS.forEach(function (n) { if ($(n).value) values[n] = $(n).value; });
+        if (values.KeepAliveMinutes === '') values.KeepAliveMinutes = '0';
+        if (!/^\d+$/.test(values.KeepAliveMinutes) || +values.KeepAliveMinutes > 1440) {
+            setSaveStatus('Keep-alive must be a whole number of minutes from 0 to 1440.', true);
+            return;
+        }
+        setSaveStatus('Saving...');
+        $('save').disabled = true;
+        var uploaded = false;
+        Promise.all([readFile($('certFile')), readFile($('caFile'))])
+            .then(function (files) {
+                var chain = Promise.resolve();
+                if (files[0]) chain = chain.then(function () { uploaded = true; return post('api/cert', files[0], 'text/plain'); });
+                if (files[1]) chain = chain.then(function () { uploaded = true; return post('api/ca', files[1], 'text/plain'); });
+                return chain;
+            })
+            .then(function () { return writeSettings(values); })
+            .then(function (reply) {
+                // Nothing changed (e.g. retrying after an auth hold): ask for a reconnect explicitly.
+                if (!uploaded && /"changed":false/.test(reply || '')) return post('api/reconnect');
+            })
+            .then(function () {
+                $('certFile').value = ''; $('caFile').value = '';
+                setSaveStatus('Saved. Connecting...', false, true);
+                autoSignInUntil = Date.now() + 20000;
+                loadSettings(); setTimeout(pollStatus, 1500);
+            })
+            .catch(function (e) { setSaveStatus('Error: ' + (e && e.message ? e.message : 'save failed'), true); })
+            .then(function () { $('save').disabled = false; });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-clear]'), function (btn) {
+        btn.addEventListener('click', function () {
+            var name = btn.getAttribute('data-clear'), values = {};
+            values[name] = '';
+            writeSettings(values).then(function () { setSaveStatus(name + ' cleared.', false, true); loadSettings(); })
+                .catch(function () { setSaveStatus('Could not clear ' + name, true); });
+        });
+    });
+
+    function removeFile(endpoint, label) {
+        post('api/' + endpoint, '', 'text/plain').then(function () { setSaveStatus(label + ' removed.', false, true); loadSettings(); })
+            .catch(function (e) { setSaveStatus('Error: ' + e.message, true); });
+    }
+    $('certRemove').addEventListener('click', function () { removeFile('cert', 'Client certificate'); });
+    $('caRemove').addEventListener('click', function () { removeFile('ca', 'CA certificate'); });
+
+    $('trustPin').addEventListener('click', function () {
+        if (!lastStatus || !lastStatus.untrusted_pin) return;
+        writeSettings({ ServerCert: lastStatus.untrusted_pin })
+            .then(function () { setSaveStatus('Certificate pinned. Connecting...', false, true); loadSettings(); setTimeout(pollStatus, 1500); })
+            .catch(function () { setSaveStatus('Could not save the pin', true); });
+    });
+
+    $('reconnect').addEventListener('click', function () {
+        post('api/reconnect').then(function () { setTimeout(pollStatus, 1000); }).catch(function () {});
+    });
+
+    loadSettings();
+    pollStatus(); pollLogs();
+    setInterval(pollStatus, 4000);
+    setInterval(pollLogs, 4000);
+})();
+</script>
+</body>
+</html>

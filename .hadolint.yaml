@@ -1,0 +1,6 @@
+---
+# Enforce error-level Dockerfile correctness. The ACAP Dockerfile uses
+# architecture-templated base images that cannot be fully resolved statically.
+failure-threshold: error
+ignored:
+  - DL3008

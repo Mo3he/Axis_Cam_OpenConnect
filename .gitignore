@@ -1,0 +1,10 @@
+bin/
+*.eap
+localdata/
+.DS_Store
+.build/
+releases/
+# Produced by the Dockerfile; only lib/tun-script.sh is source.
+app/OpenConnect_VPN
+app/lib/*
+!app/lib/tun-script.sh

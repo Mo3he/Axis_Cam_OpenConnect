@@ -1,0 +1,33 @@
+{
+  "app": "OpenConnect_VPN",
+  "friendlyName": "OpenConnect VPN",
+  "versionPolicy": "patch",
+  "upstream": {
+    "type": "script",
+    "script": "ci/upstream-version.sh",
+    "name": "OpenConnect",
+    "note": "OpenConnect versions (9.21) are not SemVer, so the ACAP keeps its own version and bumps the patch digit when the pin moves.",
+    "changesUrl": "https://www.infradead.org/openconnect/changelog.html"
+  },
+  "build": {
+    "command": "./build.sh",
+    "env": {}
+  },
+  "pins": [
+    {
+      "file": "Dockerfile",
+      "arg": "OPENCONNECT_VERSION"
+    },
+    {
+      "file": "Dockerfile",
+      "arg": "OPENCONNECT_SHA256",
+      "sha256Url": "https://www.infradead.org/openconnect/download/openconnect-${VERSION}.tar.gz"
+    }
+  ],
+  "signing": {
+    "skip": [
+      "*_acap3.eap",
+      "*_root.eap"
+    ]
+  }
+}
