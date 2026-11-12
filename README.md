@@ -238,8 +238,8 @@ lib/gp-client (libopenconnect, GlobalProtect protocol)
    │  TLS/ESP to the gateway                │ SOCK_DGRAM socketpair ($VPNFD)
    │                                        ▼
    │                          netstack_proxy (gVisor userspace TCP/IP)
-   │                            ├─ <vpn-ip>:80/443/554 -> 127.0.0.2 (camera; 127.0.0.1 if refused)
-   │                            ├─ <vpn-ip>:1080 SOCKS5 -> 127.0.0.2:<any>
+   │                            ├─ <vpn-ip>:80/443/554 -> 127.0.0.1 (camera)
+   │                            ├─ <vpn-ip>:1080 SOCKS5 -> 127.0.0.1:<any>
    │                            └─ 127.0.0.1:28080 / :21080 -> through the tunnel
 OpenConnect_VPN (bridge): settings, sign-in relay, session, supervision
 ```
