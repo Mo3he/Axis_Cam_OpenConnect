@@ -111,6 +111,8 @@ static guint retry_timer;
 static guint kill_timer;
 static guint login_timer;
 static guint retry_delay = RETRY_MIN_S;
+/* Gateway session refusals since the last stable session; see cookie_rejected. */
+static guint cookie_rejections;
 static gint64 retry_at;        /* monotonic seconds, 0 when no retry is queued */
 static gint64 connected_mono;  /* monotonic seconds, 0 when not connected */
 static gint64 connected_since; /* wall-clock seconds for the UI */
@@ -458,6 +460,7 @@ static void stop_client(gboolean logout) {
 static void restart_client(gboolean interactive) {
     cancel_retry();
     retry_delay = RETRY_MIN_S;
+    cookie_rejections = 0;
     if (client_pid > 0) {
         restart_pending = TRUE;
         restart_interactive = interactive;
@@ -733,10 +736,28 @@ static void on_client_exit(GPid pid, gint status, gpointer user_data) {
     }
     if (g_strcmp0(reason, "cookie_rejected") == 0) {
         /* The gateway ended the session (expired or logged out): sign in again,
-         * which only stays unattended if the stored credentials are enough. */
+         * which only stays unattended if the stored credentials are enough.
+         * A gateway that refuses every fresh session too (a policy that admits
+         * the login but not the tunnel) must not get a sign-in every few
+         * seconds: that floods its logs and can lock the account. */
         clear_session();
-        syslog(LOG_INFO, "gateway session ended; signing in again");
-        start_client(FALSE);
+        if (session >= STABLE_SESSION_S)
+            cookie_rejections = 0;
+        if (cookie_rejections++ == 0) {
+            syslog(LOG_INFO, "gateway session ended; signing in again");
+            start_client(FALSE);
+            return;
+        }
+        state = "disconnected";
+        gchar *message = g_strdup_printf("The gateway refused the session again right after signing in. "
+                                         "Retrying in %u s; check the account's VPN access with the "
+                                         "administrator.", retry_delay);
+        set_text(&last_error, message);
+        g_free(message);
+        syslog(LOG_WARNING, "gateway refused a fresh session (%u in a row); not signing in again for %u s",
+               cookie_rejections, retry_delay);
+        schedule_retry(retry_delay);
+        retry_delay = MIN(retry_delay * 2, RETRY_MAX_S);
         return;
     }
     if (g_strcmp0(reason, "logged_out") == 0) {
