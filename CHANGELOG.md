@@ -5,6 +5,15 @@ links to its full release notes on GitHub.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+- Stop signing in every few seconds when the gateway refuses each new session
+  (for example a policy that accepts the login but not the tunnel). The first
+  refusal still signs in again at once, as when a saved session has expired;
+  further refusals wait 15 s, doubling up to 10 minutes, and the status says
+  why. Before, the camera signed in about every 5 seconds, flooding the
+  portal's logs and risking an account lockout.
+
 ## 0.1.1 - 2026-11-13
 
 - Update to upstream 9.21.

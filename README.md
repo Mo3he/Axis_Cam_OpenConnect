@@ -120,7 +120,10 @@ step.
 
 If the portal or gateway refuses a sign-in result you sent, the camera stops
 and waits for you rather than submitting anything again, so a failed hand-off
-cannot add a series of failed sign-ins to the account.
+cannot add a series of failed sign-ins to the account. Likewise, if the
+gateway keeps refusing the session right after each sign-in, the camera signs
+in again once and then waits (15 s, doubling up to 10 minutes) instead of
+retrying at once.
 
 After a successful sign-in the camera saves the gateway session (readable only
 by the app) and uses it for every reconnect and app restart, so a camera
